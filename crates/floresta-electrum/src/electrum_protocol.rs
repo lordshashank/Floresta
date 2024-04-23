@@ -35,7 +35,8 @@ use log::info;
 use log::trace;
 use serde_json::json;
 use serde_json::Value;
-use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
+// use async_std_openssl::SslAcceptor;
+// use openssl::ssl::{SslFiletype, SslMethod};
 
 use crate::get_arg;
 use crate::json_rpc_res;
@@ -115,7 +116,6 @@ pub struct ElectrumServer<Blockchain: BlockchainInterface> {
     /// in different requests.
     pub addresses_to_scan: Vec<sha256::Hash>,
 
-    pub ssl_acceptor: Arc<SslAcceptor>
 }
 
 impl<Blockchain: BlockchainInterface> ElectrumServer<Blockchain> {
@@ -128,17 +128,23 @@ impl<Blockchain: BlockchainInterface> ElectrumServer<Blockchain> {
         cert_path: &str,
         key_path: &str,
     ) -> Result<ElectrumServer<Blockchain>, Box<dyn std::error::Error>> {
-        let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-        builder.set_private_key_file(key_path, SslFiletype::PEM).unwrap();
-        builder.set_certificate_chain_file(cert_path).unwrap();
-
+        // Load SSL certificate and private key
+        // let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
+        // builder.set_private_key_file(key_path, SslFiletype::PEM)?;
+        // builder.set_certificate_chain_file(cert_path)?;
+    
+        // Bind TCP listener
         let listener = Arc::new(TcpListener::bind(address).await?);
-        let ssl_acceptor = Arc::new(builder.build());
+    
+        // Wrap TCP listener with SSL acceptor
+        // let listener = Arc::new(builder.into_listener(listener.into_std().await)?);
+    
         let (tx, rx) = unbounded();
         let unconfirmed = address_cache.read().await.find_unconfirmed().unwrap();
         for tx in unconfirmed {
             chain.broadcast(&tx).expect("Invalid chain");
         }
+    
         Ok(ElectrumServer {
             chain,
             address_cache,
@@ -150,7 +156,6 @@ impl<Blockchain: BlockchainInterface> ElectrumServer<Blockchain> {
             message_transmitter: tx,
             client_addresses: HashMap::new(),
             addresses_to_scan: Vec::new(),
-            ssl_acceptor
         })
     }
     /// Handle a request from a client. All methods are defined in the electrum

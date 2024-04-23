@@ -14,14 +14,14 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use async_std::channel::bounded;
-use async_std::channel::Receiver;
-use async_std::channel::Sender;
-use async_std::channel::{self};
-use async_std::future::timeout;
-use async_std::net::TcpStream;
-use async_std::sync::RwLock;
-use async_std::task::spawn;
+use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::time::timeout;
+use tokio::net::TcpStream;
+use tokio::sync::RwLock;
+use tokio::spawn;
 use bitcoin::p2p::address::AddrV2;
 use bitcoin::p2p::address::AddrV2Message;
 use bitcoin::p2p::utreexo::UtreexoBlock;
@@ -53,6 +53,7 @@ use super::socks::Socks5Addr;
 use super::socks::Socks5Error;
 use super::socks::Socks5StreamBuilder;
 use crate::node_context::PeerId;
+
 
 #[derive(Debug)]
 pub enum NodeNotification {
@@ -188,7 +189,7 @@ where
         max_banscore: Option<u32>,
         fixed_peer: Option<LocalAddress>,
     ) -> Self {
-        let (node_tx, node_rx) = channel::unbounded();
+        let (node_tx, node_rx) = unbounded_channel();
         let socks5 = proxy.map(Socks5StreamBuilder::new);
         UtreexoNode(
             NodeCommon {
@@ -580,7 +581,7 @@ where
         network: bitcoin::Network,
         node_tx: Sender<NodeNotification>,
     ) -> impl Future<Output = ()> + Send + 'static {
-        Peer::<TcpStream>::create_outbound_connection(
+        Peer::create_outbound_connection(
             peer_id_count,
             (address.get_net_address(), address.get_port()),
             mempool,
@@ -640,7 +641,7 @@ where
         peer_id: usize,
         address: LocalAddress,
     ) {
-        let (requests_tx, requests_rx) = bounded(1024);
+        let (requests_tx, requests_rx) = channel(1024);
         if let Some(ref proxy) = self.socks5 {
             spawn(timeout(
                 Duration::from_secs(10),
